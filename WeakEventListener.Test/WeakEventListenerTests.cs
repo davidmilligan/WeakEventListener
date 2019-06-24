@@ -1,13 +1,12 @@
 using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using DM.Core.Events;
 using System.Runtime.CompilerServices;
 using System.Diagnostics;
 
-namespace WeakEventListener.Test
+namespace MissingFrom.Net.Test
 {
     [TestClass]
-    public class WeakEventListenerTests
+    public class WeakEventManagerTests
     {
         public TestContext TestContext { get; set; }
 
@@ -46,17 +45,35 @@ namespace WeakEventListener.Test
             Assert.AreEqual(0, subscriber.Invocations);
         }
 
+        [TestMethod]
+        public void WeakEventManager_ClearWeakEventListeners_ClearsAllListeners_Test()
+        {
+            var publisher1 = new TestPublisher();
+            var publisher2 = new TestPublisher();
+            var subscriber = new TestSubscriber(publisher1);
+            subscriber.Start(publisher2);
+
+            subscriber.Clear();
+            publisher1.Fire();
+            publisher2.Fire();
+
+            Assert.AreEqual(0, subscriber.Invocations);
+        }
+
         private TestPublisher _publisher;
         private TestSubscriber _subscriber;
 
         private void Setup()
         {
+            // we need to instantiate these in a separate method because there are some debug features that can keep objects
+            // alive for the entire scope of the method they are created in even when they go out of scope and GC.Collect
+            // is called explicitly
             _publisher = new TestPublisher();
             _subscriber = new TestSubscriber(_publisher);
         }
 
         [TestMethod]
-        public void WeakEventManager_AddWeakEventListener_GC_Test()
+        public void WeakEventManager_AddWeakEventListener_Publisher_GC_Test()
         {
             Setup();
             var reference = new WeakReference(_subscriber);
@@ -70,12 +87,42 @@ namespace WeakEventListener.Test
         }
 
         [TestMethod]
+        public void WeakEventManager_AddWeakEventListener_Subscriber_GC_Test()
+        {
+            Setup();
+            var reference = new WeakReference(_publisher);
+
+            _publisher = null;
+            _subscriber.Publisher = null;
+
+            GC.Collect();
+
+            Assert.IsFalse(reference.IsAlive);
+        }
+
+        [TestMethod]
+        public void WeakEventManager_AddWeakEventListener_Both_GC_Test()
+        {
+            Setup();
+            var reference1 = new WeakReference(_publisher);
+            var reference2 = new WeakReference(_subscriber);
+
+            _publisher = null;
+            _subscriber = null;
+
+            GC.Collect();
+
+            Assert.IsFalse(reference1.IsAlive);
+            Assert.IsFalse(reference2.IsAlive);
+        }
+
+        [TestMethod]
         public void WeakEventManager_Perf_Test()
         {
             const int iterations = 100_000;
             var weakRegister = Time(() =>
             {
-                for(int i = 0; i < iterations; i++)
+                for (int i = 0; i < iterations; i++)
                 {
                     var publisher = new TestPublisher();
                     var subscriber = new TestSubscriber(publisher);
@@ -83,7 +130,7 @@ namespace WeakEventListener.Test
             });
             var normalRegister = Time(() =>
             {
-                for(int i = 0; i < iterations; i++)
+                for (int i = 0; i < iterations; i++)
                 {
                     var publisher = new TestPublisher();
                     int x = 0;
@@ -94,7 +141,7 @@ namespace WeakEventListener.Test
             {
                 var publisher = new TestPublisher();
                 var subscriber = new TestSubscriber(publisher);
-                for(int i = 0; i < iterations; i++)
+                for (int i = 0; i < iterations; i++)
                 {
                     publisher.Fire();
                 }
@@ -104,7 +151,7 @@ namespace WeakEventListener.Test
                 var publisher = new TestPublisher();
                 int x = 0;
                 publisher.TheEvent += (s, e) => x++;
-                for(int i = 0; i < iterations; i++)
+                for (int i = 0; i < iterations; i++)
                 {
                     publisher.Fire();
                 }
@@ -167,6 +214,11 @@ normal fire:     {normalFire}ms
         public TestSubscriber(TestPublisher publisher)
         {
             Publisher = publisher;
+            _manager.AddWeakEventListener<TestPublisher, TestEventArgs>(publisher, nameof(publisher.TheEvent), OnTheEvent);
+        }
+
+        public void Start(TestPublisher publisher)
+        {
             _manager.AddWeakEventListener<TestPublisher, TestEventArgs>(publisher, nameof(publisher.TheEvent), OnTheEvent);
         }
 

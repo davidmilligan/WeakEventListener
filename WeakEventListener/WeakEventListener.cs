@@ -1,26 +1,27 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Reflection;
 
-namespace DM.Core.Events
+namespace MissingFrom.Net
 {
-    public interface IWeakEventListener
+    internal interface IWeakEventListener
     {
         bool IsAlive { get; }
         object Source { get; }
         void StopListening();
     }
 
-    public class WeakEventListener<T,TArgs> : IWeakEventListener
+    internal class WeakEventListener<T, TArgs> : IWeakEventListener
         where T : class
         where TArgs : EventArgs
     {
+        private static readonly ConcurrentDictionary<string, EventInfo> _eventInfos = new ConcurrentDictionary<string, EventInfo>();
         private readonly WeakReference<T> _source;
-        private readonly WeakReference<Action<T,TArgs>> _handler;
-        private readonly EventInfo _eventInfo;
+        private readonly WeakReference<Action<T, TArgs>> _handler;
 
         public bool IsAlive => _handler.TryGetTarget(out var _) && _source.TryGetTarget(out var __);
-        public object Source 
+
+        public object Source
         {
             get
             {
@@ -32,12 +33,16 @@ namespace DM.Core.Events
             }
         }
 
-        public WeakEventListener(T source, string eventName, Action<T,TArgs> handler)
+        public WeakEventListener(T source, string eventName, Action<T, TArgs> handler)
         {
             _source = new WeakReference<T>(source ?? throw new ArgumentNullException(nameof(source)));
-            _handler = new WeakReference<Action<T,TArgs>>(handler) ?? throw new ArgumentNullException(nameof(handler));
-            _eventInfo = source.GetType().GetEvent(eventName) ?? throw new ArgumentException("Unknown Event Name", nameof(eventName));
-            _eventInfo.AddEventHandler(source, new EventHandler<TArgs>(HandleEvent));
+            _handler = new WeakReference<Action<T, TArgs>>(handler) ?? throw new ArgumentNullException(nameof(handler));
+            if (!_eventInfos.TryGetValue(eventName, out var eventInfo))
+            {
+                eventInfo = source.GetType().GetEvent(eventName) ?? throw new ArgumentException("Unknown Event Name", nameof(eventName));
+                _eventInfos.TryAdd(eventName, eventInfo);
+            }
+            eventInfo.AddEventHandler(source, new EventHandler<TArgs>(HandleEvent));
         }
 
         private void HandleEvent(object source, TArgs e)
@@ -56,54 +61,11 @@ namespace DM.Core.Events
         {
             if (_source.TryGetTarget(out var source))
             {
-                _eventInfo.RemoveEventHandler(source, new EventHandler<TArgs>(HandleEvent));
-            }
-        }
-    }
-
-    public class WeakEventManager
-    {
-        private List<IWeakEventListener> _listeners = new List<IWeakEventListener>();
-
-        public void AddWeakEventListener<T,TArgs>(T source, string eventName, Action<T,TArgs> handler)
-            where T : class
-            where TArgs : EventArgs
-        {
-            _listeners.Add(new WeakEventListener<T,TArgs>(source, eventName, handler));
-        }
-
-        public void RemoveWeakEventListener<T>(T source)
-            where T : class
-        {
-            var toRemove = new List<IWeakEventListener>();
-            foreach (var listener in _listeners)
-            {
-                if (!listener.IsAlive)
+                foreach (var eventInfo in _eventInfos.Values)
                 {
-                    toRemove.Add(listener);
-                }
-                else if (listener.Source == source)
-                {
-                    listener.StopListening();
-                    toRemove.Add(listener);
+                    eventInfo.RemoveEventHandler(source, new EventHandler<TArgs>(HandleEvent));
                 }
             }
-            foreach (var item in toRemove)
-            {
-                _listeners.Remove(item);
-            }
-        }
-
-        public void ClearWeakEventListeners()
-        {
-            foreach (var listener in _listeners)
-            {
-                if (listener.IsAlive)
-                {
-                    listener.StopListening();
-                }
-            }
-            _listeners.Clear();
         }
     }
 }
