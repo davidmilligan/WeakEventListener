@@ -25,6 +25,7 @@ namespace MissingFrom.Net
     public class WeakEventManager
     {
         private List<IWeakEventListener> _listeners = new List<IWeakEventListener>();
+        private readonly List<Delegate> _handlers = new List<Delegate>(); //to keep the delegates from getting GC'd
 
         /// <summary>
         /// Registers the given delegate as a handler for the event specified by `eventName` on the given source.
@@ -34,6 +35,7 @@ namespace MissingFrom.Net
             where TArgs : EventArgs
         {
             _listeners.Add(new WeakEventListener<T, TArgs>(source, eventName, handler));
+            _handlers.Add(handler);
         }
 
         /// <summary>
@@ -58,6 +60,10 @@ namespace MissingFrom.Net
             foreach (var item in toRemove)
             {
                 _listeners.Remove(item);
+                if (item.IsAlive)
+                {
+                    _handlers.Remove(item.Handler);
+                }
             }
         }
 
@@ -74,6 +80,7 @@ namespace MissingFrom.Net
                 }
             }
             _listeners.Clear();
+            _handlers.Clear();
         }
     }
 }
