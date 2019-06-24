@@ -2,12 +2,25 @@ using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Runtime.CompilerServices;
 using System.Diagnostics;
+using System.ComponentModel;
 
 namespace MissingFrom.Net.Test
 {
     [TestClass]
     public class WeakEventManagerTests
     {
+        private TestPublisher _publisher;
+        private TestSubscriber _subscriber;
+
+        private void Setup()
+        {
+            // we need to instantiate these in a separate method because there are some debug features that can keep objects
+            // alive for the entire scope of the method they are created in even when they go out of scope and GC.Collect
+            // is called explicitly
+            _publisher = new TestPublisher();
+            _subscriber = new TestSubscriber(_publisher);
+        }
+
         public TestContext TestContext { get; set; }
 
         [TestMethod]
@@ -19,6 +32,30 @@ namespace MissingFrom.Net.Test
             publisher.Fire();
 
             Assert.AreEqual(1, subscriber.Invocations);
+        }
+
+        [TestMethod]
+        public void WeakEventManager_AddWeakEventListener_FiresCustomDelegateEvent_Test()
+        {
+            var publisher = new TestPublisher();
+            var subscriber = new TestSubscriber(publisher);
+            subscriber.StartProperty(publisher);
+
+            publisher.FireProperty();
+
+            Assert.AreEqual(1, subscriber.Invocations);
+        }
+
+        [TestMethod]
+        public void WeakEventManager_AddWeakEventListener_FiresEventAfterGC_Test()
+        {
+            Setup();
+
+            GC.Collect();
+
+            _publisher.Fire();
+
+            Assert.AreEqual(1, _subscriber.Invocations);
         }
 
         [TestMethod]
@@ -46,6 +83,19 @@ namespace MissingFrom.Net.Test
         }
 
         [TestMethod]
+        public void WeakEventManager_RemoveWeakEventListener_CustomDelegateEventNoLongerFires_Test()
+        {
+            var publisher = new TestPublisher();
+            var subscriber = new TestSubscriber(publisher);
+            subscriber.StartProperty(publisher);
+
+            subscriber.Stop();
+            publisher.FireProperty();
+
+            Assert.AreEqual(0, subscriber.Invocations);
+        }
+
+        [TestMethod]
         public void WeakEventManager_ClearWeakEventListeners_ClearsAllListeners_Test()
         {
             var publisher1 = new TestPublisher();
@@ -58,18 +108,6 @@ namespace MissingFrom.Net.Test
             publisher2.Fire();
 
             Assert.AreEqual(0, subscriber.Invocations);
-        }
-
-        private TestPublisher _publisher;
-        private TestSubscriber _subscriber;
-
-        private void Setup()
-        {
-            // we need to instantiate these in a separate method because there are some debug features that can keep objects
-            // alive for the entire scope of the method they are created in even when they go out of scope and GC.Collect
-            // is called explicitly
-            _publisher = new TestPublisher();
-            _subscriber = new TestSubscriber(_publisher);
         }
 
         [TestMethod]
@@ -164,7 +202,7 @@ normal fire:     {normalFire}ms
             ");
         }
 
-        public long Time(Action action)
+        public static long Time(Action action)
         {
             var stopWatch = new Stopwatch();
             stopWatch.Start();
@@ -177,13 +215,14 @@ normal fire:     {normalFire}ms
     public class TestEventArgs : EventArgs
     {
         public string Value { get; }
+
         public TestEventArgs(string value)
         {
             Value = value;
         }
     }
 
-    public interface ITestEventSource
+    public interface ITestEventSource : INotifyPropertyChanged
     {
         event EventHandler<TestEventArgs> TheEvent;
     }
@@ -191,16 +230,23 @@ normal fire:     {normalFire}ms
     public class TestPublisherBase : ITestEventSource
     {
         public event EventHandler<TestEventArgs> TheEvent;
+        public event PropertyChangedEventHandler PropertyChanged;
 
         protected void OnTheEvent([CallerMemberName] string name = "")
         {
             TheEvent?.Invoke(this, new TestEventArgs(name));
+        }
+
+        protected void OnPropertyChanged([CallerMemberName] string name = "")
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
     }
 
     public class TestPublisher : TestPublisherBase
     {
         public void Fire() => OnTheEvent();
+        public void FireProperty() => OnPropertyChanged();
     }
 
     public class TestSubscriber
@@ -209,7 +255,7 @@ normal fire:     {normalFire}ms
 
         public TestPublisher Publisher { get; set; }
 
-        private WeakEventManager _manager = new WeakEventManager();
+        private readonly WeakEventManager _manager = new WeakEventManager();
 
         public TestSubscriber(TestPublisher publisher)
         {
@@ -220,6 +266,11 @@ normal fire:     {normalFire}ms
         public void Start(TestPublisher publisher)
         {
             _manager.AddWeakEventListener<TestPublisher, TestEventArgs>(publisher, nameof(publisher.TheEvent), OnTheEvent);
+        }
+
+        public void StartProperty(TestPublisher publisher)
+        {
+            _manager.AddWeakEventListener<TestPublisher, PropertyChangedEventArgs>(publisher, nameof(publisher.PropertyChanged), OnPropertyChanged);
         }
 
         public void Stop()
@@ -235,7 +286,11 @@ normal fire:     {normalFire}ms
         private void OnTheEvent(TestPublisher sender, TestEventArgs e)
         {
             Invocations++;
-            Assert.AreEqual(sender, Publisher);
+        }
+
+        private void OnPropertyChanged(TestPublisher sender, PropertyChangedEventArgs e)
+        {
+            Invocations++;
         }
     }
 }
