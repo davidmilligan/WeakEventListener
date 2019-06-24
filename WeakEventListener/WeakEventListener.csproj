@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <PackageId>SimpleWeakEventListener</PackageId>
     <Version>1.0.0.0</Version>
     <Authors>David Milligan</Authors>
     <Product>WeakEventListener</Product>
