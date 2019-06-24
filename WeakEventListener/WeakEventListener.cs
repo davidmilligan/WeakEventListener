@@ -8,6 +8,7 @@ namespace MissingFrom.Net
     {
         bool IsAlive { get; }
         object Source { get; }
+        Delegate Handler { get; }
         void StopListening();
     }
 
@@ -15,9 +16,9 @@ namespace MissingFrom.Net
         where T : class
         where TArgs : EventArgs
     {
-        private static readonly ConcurrentDictionary<string, EventInfo> _eventInfos = new ConcurrentDictionary<string, EventInfo>();
         private readonly WeakReference<T> _source;
         private readonly WeakReference<Action<T, TArgs>> _handler;
+        private readonly EventInfo _eventInfo;
 
         public bool IsAlive => _handler.TryGetTarget(out var _) && _source.TryGetTarget(out var __);
 
@@ -33,16 +34,31 @@ namespace MissingFrom.Net
             }
         }
 
+        public Delegate Handler
+        {
+            get
+            {
+                if (_handler.TryGetTarget(out var handler))
+                {
+                    return handler;
+                }
+                return null;
+            }
+        }
+
         public WeakEventListener(T source, string eventName, Action<T, TArgs> handler)
         {
             _source = new WeakReference<T>(source ?? throw new ArgumentNullException(nameof(source)));
-            _handler = new WeakReference<Action<T, TArgs>>(handler) ?? throw new ArgumentNullException(nameof(handler));
-            if (!_eventInfos.TryGetValue(eventName, out var eventInfo))
+            _handler = new WeakReference<Action<T, TArgs>>(handler ?? throw new ArgumentNullException(nameof(handler)));
+            _eventInfo = source.GetType().GetEvent(eventName) ?? throw new ArgumentException("Unknown Event Name", nameof(eventName));
+            if (_eventInfo.EventHandlerType == typeof(EventHandler<TArgs>))
             {
-                eventInfo = source.GetType().GetEvent(eventName) ?? throw new ArgumentException("Unknown Event Name", nameof(eventName));
-                _eventInfos.TryAdd(eventName, eventInfo);
+                _eventInfo.AddEventHandler(source, new EventHandler<TArgs>(HandleEvent));
             }
-            eventInfo.AddEventHandler(source, new EventHandler<TArgs>(HandleEvent));
+            else //the event type isn't just an EventHandler<> so we have to create the delegate using reflection
+            {
+                _eventInfo.AddEventHandler(source, Delegate.CreateDelegate(_eventInfo.EventHandlerType, this, nameof(HandleEvent)));
+            }
         }
 
         private void HandleEvent(object source, TArgs e)
@@ -61,9 +77,13 @@ namespace MissingFrom.Net
         {
             if (_source.TryGetTarget(out var source))
             {
-                foreach (var eventInfo in _eventInfos.Values)
+                if (_eventInfo.EventHandlerType == typeof(EventHandler<TArgs>))
                 {
-                    eventInfo.RemoveEventHandler(source, new EventHandler<TArgs>(HandleEvent));
+                    _eventInfo.RemoveEventHandler(source, new EventHandler<TArgs>(HandleEvent));
+                }
+                else
+                {
+                    _eventInfo.RemoveEventHandler(source, Delegate.CreateDelegate(_eventInfo.EventHandlerType, this, nameof(HandleEvent)));
                 }
             }
         }
