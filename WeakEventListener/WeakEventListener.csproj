@@ -2,8 +2,13 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <PackageId>SimpleWeakEventListener</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/davidmilligan/WeakEventListener</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/davidmilligan/WeakEventListener.git</RepositoryUrl>
     <Version>1.0.0.0</Version>
     <Authors>David Milligan</Authors>
     <Product>WeakEventListener</Product>
+    <Title>Weak Event Listener</Title>
+    <Description>This library provides methods for registering and unregistering event handlers that don't cause memory "leaks" when the lifetime of the listener is longer than the lifetime of the object being listened to (one of the most common scenarios for memory leaks in C#/.Net).</Description>
   </PropertyGroup>
 </Project>
