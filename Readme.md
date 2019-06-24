@@ -32,6 +32,6 @@ Register your event handler:
 ```
     public MySubscriber(Foo foo)
     {
-        manager.AddWeakEventListener<Foo, BarEventArgs>(foo, nameof(foo.Bar) HandleFooBar);
+        manager.AddWeakEventListener<Foo, BarEventArgs>(foo, nameof(foo.Bar), HandleFooBar);
     }
 ```
