@@ -13,7 +13,11 @@ variables:
   buildConfiguration: 'Release'
 
 steps:
-- script: dotnet restore
+- task: DotNetCoreCLI@2
+  displayName: NuGet Restore
+  inputs:
+    command: restore
+    projects: '**/*.csproj'
 - task: DotNetCoreCLI@2
   displayName: Build
   inputs:
@@ -21,9 +25,10 @@ steps:
     projects: '**/*.csproj'
     arguments: '--configuration Release'
 - task: DotNetCoreCLI@2
+  displayName: Test
   inputs:
     command: test
-    projects: '**/*Tests/*.csproj'
+    projects: '**/*.Test.csproj'
     arguments: '--configuration $(buildConfiguration) --collect "Code coverage"'
 - task: PublishTestResults@2
   inputs:
