@@ -1,7 +1,7 @@
 Weak Event Listeners
 ---------------------
 
-![Nuget](https://img.shields.io/nuget/v/SimpleWeakEventListener.svg) [![Build Status](https://dev.azure.com/davidlmilligan/davidlmilligan/_apis/build/status/davidmilligan.WeakEventListener?branchName=master)](https://dev.azure.com/davidlmilligan/davidlmilligan/_build/latest?definitionId=1&branchName=master)
+[![Nuget](https://img.shields.io/nuget/v/SimpleWeakEventListener.svg)](https://www.nuget.org/packages/SimpleWeakEventListener/) [![Build Status](https://dev.azure.com/davidlmilligan/davidlmilligan/_apis/build/status/davidmilligan.WeakEventListener?branchName=master)](https://dev.azure.com/davidlmilligan/davidlmilligan/_build/latest?definitionId=1&branchName=master)
 
 This library provides methods for registering and unregistering event handlers that don't cause memory "leaks" when the lifetime of the listener is longer than the lifetime of the object being listened to (one of the most common scenarios for memory leaks in C#/.Net).
 
