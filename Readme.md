@@ -11,7 +11,7 @@ This implementation does also provide an additional benefit and workaround to a 
 
 ### Examples
 
-Create an instance of `WeakEventManager` in the class that wishes to register weak events, or alternatively, create a singleton instance of `WeakEventManager` to be shared. In this example, we'll assume a type `Foo` has an event `Bar` of type `EventHandler<BarEventArgs>` we want to register an event for.
+Create an instance of `WeakEventManager` in the class that wishes to register weak events. In this example, we'll assume a type `Foo` has an event `Bar` of type `EventHandler<BarEventArgs>` we want to register an event for.
 
 ```
 pubic class MySubsriber
