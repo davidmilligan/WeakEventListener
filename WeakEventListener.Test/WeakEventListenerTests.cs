@@ -21,8 +21,6 @@ namespace MissingFrom.Net.Test
             _subscriber = new TestSubscriber(_publisher);
         }
 
-        public TestContext TestContext { get; set; }
-
         [TestMethod]
         public void WeakEventManager_AddWeakEventListener_FiresEvent_Test()
         {
@@ -35,10 +33,46 @@ namespace MissingFrom.Net.Test
         }
 
         [TestMethod]
-        public void WeakEventManager_AddWeakEventListener_FiresCustomDelegateEvent_Test()
+        public void WeakEventManager_AddWeakEventListener_Typed_FiresEvent_Test()
         {
             var publisher = new TestPublisher();
-            var subscriber = new TestSubscriber(publisher);
+            var subscriber = new TestSubscriber();
+            subscriber.StartTyped(publisher);
+
+            publisher.Fire();
+
+            Assert.AreEqual(1, subscriber.Invocations);
+        }
+
+        [TestMethod]
+        public void WeakEventManager_AddWeakEventListener_Custom_FiresEvent_Test()
+        {
+            var publisher = new TestPublisher();
+            var subscriber = new TestSubscriber();
+            subscriber.StartCustom(publisher);
+
+            publisher.FireProperty();
+
+            Assert.AreEqual(1, subscriber.Invocations);
+        }
+
+        [TestMethod]
+        public void WeakEventManager_AddWeakEventListener_TypedCustom_FiresEvent_Test()
+        {
+            var publisher = new TestPublisher();
+            var subscriber = new TestSubscriber();
+            subscriber.StartTypedCustom(publisher);
+
+            publisher.FireProperty();
+
+            Assert.AreEqual(1, subscriber.Invocations);
+        }
+
+        [TestMethod]
+        public void WeakEventManager_AddWeakEventListener_Property_FiresEvent_Test()
+        {
+            var publisher = new TestPublisher();
+            var subscriber = new TestSubscriber();
             subscriber.StartProperty(publisher);
 
             publisher.FireProperty();
@@ -153,20 +187,89 @@ namespace MissingFrom.Net.Test
             Assert.IsFalse(reference1.IsAlive);
             Assert.IsFalse(reference2.IsAlive);
         }
+    }
+
+    [TestClass]
+    public class WeakEventManagerPeformanceTests
+    {
+        private const int iterations = 100_000;
+
+        public TestContext TestContext { get; set; }
 
         [TestMethod]
-        public void WeakEventManager_Perf_Test()
+        public void Perf_WeakEventManager_RegisterWeak_Test()
         {
-            const int iterations = 100_000;
-            var weakRegister = Time(() =>
+            Time(() =>
             {
                 for (int i = 0; i < iterations; i++)
                 {
                     var publisher = new TestPublisher();
-                    var subscriber = new TestSubscriber(publisher);
+                    var subscriber = new TestSubscriber();
+                    subscriber.Start(publisher);
                 }
             });
-            var normalRegister = Time(() =>
+        }
+
+        [TestMethod]
+        public void Perf_WeakEventManager_RegisterWeakCustom_Test()
+        {
+            Time(() =>
+            {
+                for (int i = 0; i < iterations; i++)
+                {
+                    var publisher = new TestPublisher();
+                    var subscriber = new TestSubscriber();
+                    subscriber.StartCustom(publisher);
+                }
+            });
+        }
+
+        [TestMethod]
+        public void Perf_WeakEventManager_RegisterWeakTyped_Test()
+        {
+            Time(() =>
+            {
+                for (int i = 0; i < iterations; i++)
+                {
+                    var publisher = new TestPublisher();
+                    var subscriber = new TestSubscriber();
+                    subscriber.StartTyped(publisher);
+                }
+            });
+        }
+
+        [TestMethod]
+        public void Perf_WeakEventManager_RegisterWeakProperty_Test()
+        {
+            Time(() =>
+            {
+                for (int i = 0; i < iterations; i++)
+                {
+                    var publisher = new TestPublisher();
+                    var subscriber = new TestSubscriber();
+                    subscriber.StartProperty(publisher);
+                }
+            });
+        }
+
+        [TestMethod]
+        public void Perf_WeakEventManager_RegisterWeakTypedCustom_Test()
+        {
+            Time(() =>
+            {
+                for (int i = 0; i < iterations; i++)
+                {
+                    var publisher = new TestPublisher();
+                    var subscriber = new TestSubscriber();
+                    subscriber.StartTypedCustom(publisher);
+                }
+            });
+        }
+
+        [TestMethod]
+        public void Perf_WeakEventManager_RegisterNormal_Test()
+        {
+            Time(() =>
             {
                 for (int i = 0; i < iterations; i++)
                 {
@@ -175,7 +278,12 @@ namespace MissingFrom.Net.Test
                     publisher.TheEvent += (s, e) => x++;
                 }
             });
-            var weakFire = Time(() =>
+        }
+
+        [TestMethod]
+        public void Perf_WeakEventManager_FireWeak_Test()
+        {
+            Time(() =>
             {
                 var publisher = new TestPublisher();
                 var subscriber = new TestSubscriber(publisher);
@@ -184,7 +292,12 @@ namespace MissingFrom.Net.Test
                     publisher.Fire();
                 }
             });
-            var normalFire = Time(() =>
+        }
+
+        [TestMethod]
+        public void Perf_WeakEventManager_FireNormal_Test()
+        {
+            Time(() =>
             {
                 var publisher = new TestPublisher();
                 int x = 0;
@@ -194,21 +307,15 @@ namespace MissingFrom.Net.Test
                     publisher.Fire();
                 }
             });
-            TestContext.WriteLine($@"
-weak register:   {weakRegister}ms
-normal register: {normalRegister}ms
-weak fire:       {weakFire}ms
-normal fire:     {normalFire}ms
-            ");
         }
 
-        public static long Time(Action action)
+        public void Time(Action action, [CallerMemberName]string name = "")
         {
             var stopWatch = new Stopwatch();
             stopWatch.Start();
             action();
             stopWatch.Stop();
-            return stopWatch.ElapsedMilliseconds;
+            TestContext.WriteLine($"{name}: {stopWatch.ElapsedMilliseconds} ms");
         }
     }
 
@@ -257,10 +364,17 @@ normal fire:     {normalFire}ms
 
         private readonly WeakEventManager _manager = new WeakEventManager();
 
+        public TestSubscriber() { }
+
         public TestSubscriber(TestPublisher publisher)
         {
             Publisher = publisher;
             _manager.AddWeakEventListener<TestPublisher, TestEventArgs>(publisher, nameof(publisher.TheEvent), OnTheEvent);
+        }
+
+        public void StartTyped(TestPublisher publisher)
+        {
+            _manager.AddWeakEventListener<TestPublisher, TestEventArgs>(publisher, (t, e) => t.TheEvent += e, (t, e) => t.TheEvent -= e, OnTheEvent);
         }
 
         public void Start(TestPublisher publisher)
@@ -270,7 +384,17 @@ normal fire:     {normalFire}ms
 
         public void StartProperty(TestPublisher publisher)
         {
+            _manager.AddWeakEventListener<TestPublisher>(publisher, OnPropertyChanged);
+        }
+
+        public void StartCustom(TestPublisher publisher)
+        {
             _manager.AddWeakEventListener<TestPublisher, PropertyChangedEventArgs>(publisher, nameof(publisher.PropertyChanged), OnPropertyChanged);
+        }
+
+        public void StartTypedCustom(TestPublisher publisher)
+        {
+            _manager.AddWeakEventListener<TestPublisher, PropertyChangedEventArgs, PropertyChangedEventHandler>(publisher, (t, e) => t.PropertyChanged += e, (t, e) => t.PropertyChanged -= e, OnPropertyChanged);
         }
 
         public void Stop()

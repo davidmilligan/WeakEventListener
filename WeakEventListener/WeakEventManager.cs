@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel;
 
 namespace MissingFrom.Net
 {
@@ -24,8 +26,7 @@ namespace MissingFrom.Net
     /// </remarks>
     public class WeakEventManager
     {
-        private List<IWeakEventListener> _listeners = new List<IWeakEventListener>();
-        private readonly List<Delegate> _handlers = new List<Delegate>(); //to keep the delegates from getting GC'd
+        private Dictionary<IWeakEventListener, Delegate> _listeners = new Dictionary<IWeakEventListener, Delegate>();
 
         /// <summary>
         /// Registers the given delegate as a handler for the event specified by `eventName` on the given source.
@@ -34,8 +35,46 @@ namespace MissingFrom.Net
             where T : class
             where TArgs : EventArgs
         {
-            _listeners.Add(new WeakEventListener<T, TArgs>(source, eventName, handler));
-            _handlers.Add(handler);
+            _listeners.Add(new WeakEventListener<T, TArgs>(source, eventName, handler), handler);
+        }
+
+        /// <summary>
+        /// Registers the given delegate as a handler for the INotifyPropertyChanged.PropertyChanged event
+        /// </summary>
+        public void AddWeakEventListener<T>(T source, Action<T, PropertyChangedEventArgs> handler)
+            where T : class, INotifyPropertyChanged
+        {
+            _listeners.Add(new PropertyChangedWeakEventListener<T>(source, handler), handler);
+        }
+
+        /// <summary>
+        /// Registers the given delegate as a handler for the INotifyCollectionChanged.CollectionChanged event
+        /// </summary>
+        public void AddWeakEventListener<T>(T source, Action<T, NotifyCollectionChangedEventArgs> handler)
+            where T : class, INotifyCollectionChanged
+        {
+            _listeners.Add(new CollectionChangedWeakEventListener<T>(source, handler), handler);
+        }
+
+        /// <summary>
+        /// Registers the given delegate as a handler for the event specified by lamba expressions for registering and unregistering the event
+        /// </summary>
+        public void AddWeakEventListener<T, TArgs>(T source, Action<T, EventHandler<TArgs>> register, Action<T, EventHandler<TArgs>> unregister, Action<T, TArgs> handler)
+            where T : class
+            where TArgs : EventArgs
+        {
+            _listeners.Add(new TypedWeakEventListener<T, TArgs>(source, register, unregister, handler), handler);
+        }
+
+        /// <summary>
+        /// Registers the given delegate as a handler for the event specified by lamba expressions for registering and unregistering the event
+        /// </summary>
+        public void AddWeakEventListener<T, TArgs, THandler>(T source, Action<T, THandler> register, Action<T, THandler> unregister, Action<T, TArgs> handler)
+            where T : class
+            where TArgs : EventArgs
+            where THandler : Delegate
+        {
+            _listeners.Add(new TypedWeakEventListener<T, TArgs, THandler>(source, register, unregister, handler), handler);
         }
 
         /// <summary>
@@ -45,7 +84,7 @@ namespace MissingFrom.Net
             where T : class
         {
             var toRemove = new List<IWeakEventListener>();
-            foreach (var listener in _listeners)
+            foreach (var listener in _listeners.Keys)
             {
                 if (!listener.IsAlive)
                 {
@@ -60,10 +99,6 @@ namespace MissingFrom.Net
             foreach (var item in toRemove)
             {
                 _listeners.Remove(item);
-                if (item.IsAlive)
-                {
-                    _handlers.Remove(item.Handler);
-                }
             }
         }
 
@@ -72,7 +107,7 @@ namespace MissingFrom.Net
         /// </summary>
         public void ClearWeakEventListeners()
         {
-            foreach (var listener in _listeners)
+            foreach (var listener in _listeners.Keys)
             {
                 if (listener.IsAlive)
                 {
@@ -80,7 +115,6 @@ namespace MissingFrom.Net
                 }
             }
             _listeners.Clear();
-            _handlers.Clear();
         }
     }
 }
